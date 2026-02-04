@@ -8,7 +8,9 @@ interface ScrapboxRendererProps {
 }
 
 export const ScrapboxRenderer: React.FC<ScrapboxRendererProps> = ({ text }) => {
-  const blocks = parse(text);
+  // Trim leading/trailing newlines that often come from LLMs
+  const normalizedText = text.trimStart();
+  const blocks = parse(normalizedText);
 
   const renderNode = (node: Node, index: number): React.ReactNode => {
     switch (node.type) {

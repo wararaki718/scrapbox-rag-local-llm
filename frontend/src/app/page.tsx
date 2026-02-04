@@ -115,10 +115,10 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-base-200">
-      <div className="max-w-5xl mx-auto h-screen flex flex-col p-4 md:p-8">
+    <main className="min-h-screen bg-base-200/50">
+      <div className="max-w-4xl mx-auto h-screen flex flex-col p-4 md:py-10">
         {/* Header */}
-        <header className="flex justify-between items-center mb-6 shrink-0">
+        <header className="flex justify-between items-center mb-8 shrink-0 px-2">
           <motion.div 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}

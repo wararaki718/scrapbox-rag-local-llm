@@ -64,8 +64,11 @@ make up
 Docker を使わずに各コンポーネントを個別に起動する場合の手順です。
 
 #### 1. Elasticsearch の起動
+日本語検索プラグインが必要なため、以下の手順でプラグイン込みのイメージを作成して起動してください。
 ```bash
-docker run -p 9200:9200 -e "discovery.type=single-node" -e "xpack.security.enabled=false" docker.elastic.co/elasticsearch/elasticsearch:8.16.0
+# Dockerfile.elasticsearch をビルドして実行
+docker build -t custom-es -f backend/Dockerfile.elasticsearch backend
+docker run -p 9200:9200 -e "discovery.type=single-node" -e "xpack.security.enabled=false" custom-es
 ```
 
 #### 2. Backend の起動

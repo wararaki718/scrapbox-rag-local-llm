@@ -14,6 +14,8 @@ interface ChatMessage {
   sources?: Source[];
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -34,7 +36,7 @@ export default function Home() {
     setMessages((prev) => [...prev, { role: "bot", content: "", sources: [] }]);
 
     try {
-      const response = await fetch("http://localhost:8000/api/v1/search/stream", {
+      const response = await fetch(`${API_BASE_URL}/api/v1/search/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: userMessage.content }),
@@ -104,7 +106,7 @@ export default function Home() {
     formData.append("file", file);
 
     try {
-      await axios.post("http://localhost:8000/api/v1/ingest", formData);
+      await axios.post(`${API_BASE_URL}/api/v1/ingest`, formData);
       alert("インポートを開始しました。バックグラウンドで処理されます。");
     } catch (error) {
       console.error(error);

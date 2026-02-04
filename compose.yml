@@ -1,0 +1,82 @@
+services:
+  elasticsearch:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.elasticsearch
+    container_name: scrapbox-rag-es
+    environment:
+      - node.name=elasticsearch
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "ingest.geoip.downloader.enabled=false"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: scrapbox-rag-backend
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      encoder:
+        condition: service_started
+    environment:
+      - ES_HOST=http://elasticsearch:9200
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - SPLADE_API_URL=http://encoder:8001/encode
+    ports:
+      - "8000:8000"
+    networks:
+      - rag-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  encoder:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: scrapbox-rag-encoder
+    command: ["uv", "run", "python", "encoder_app.py"]
+    ports:
+      - "8001:8001"
+    networks:
+      - rag-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: scrapbox-rag-frontend
+    depends_on:
+      - backend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+    networks:
+      - rag-network
+
+networks:
+  rag-network:
+    driver: bridge
+
+volumes:
+  es_data:
+    driver: local

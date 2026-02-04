@@ -8,8 +8,8 @@ import os
 app = FastAPI()
 
 # Model for SPLADE
-# Using a lightweight version for local Mac environment
-MODEL_ID = "naver/splade-v2-distilbert-gop"
+# Using a Japanese-optimized SPLADE model for better Scrapbox search results
+MODEL_ID = "hotchpotch/japanese-splade-v2"
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print(f"Using device: {device}")

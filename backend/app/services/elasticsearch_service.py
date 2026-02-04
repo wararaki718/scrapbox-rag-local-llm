@@ -8,7 +8,8 @@ class ElasticsearchService:
     def __init__(self):
         self.client = AsyncElasticsearch(
             settings.ES_HOST,
-            basic_auth=(settings.ES_USER, settings.ES_PASSWORD) if settings.ES_USER else None
+            basic_auth=(settings.ES_USER, settings.ES_PASSWORD) if settings.ES_USER else None,
+            headers={"Accept": "application/vnd.elasticsearch+json; compatible-with=8", "Content-Type": "application/vnd.elasticsearch+json; compatible-with=8"}
         )
 
     async def create_index_if_not_exists(self):
@@ -76,7 +77,7 @@ class ElasticsearchService:
         # Actually, for SPLADE, we often use the 'script_score' or 'rank_feature' queries.
         
         should_clauses = [
-            {"rank_feature": {"field": "sparse_vector", "boost": weight, "log": {"scaling_factor": 1.0}}}
+            {"rank_feature": {"field": f"sparse_vector.{token}", "boost": weight}}
             for token, weight in query_vector.items()
         ]
 

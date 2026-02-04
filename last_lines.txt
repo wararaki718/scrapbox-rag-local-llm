@@ -1,0 +1,10 @@
+    args = parser.parse_args()
+    
+    if args.json:
+        asyncio.run(run_import(args.json))
+    elif args.project:
+        asyncio.run(run_import_api(args.project, args.sid))
+    else:
+        parser.print_help()
+        sys.exit(1)
+```

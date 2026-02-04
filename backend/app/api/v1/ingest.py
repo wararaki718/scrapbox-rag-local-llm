@@ -4,6 +4,7 @@ from app.services.encoder_service import EncoderService
 from app.services.elasticsearch_service import ElasticsearchService
 from app.models.scrapbox import ScrapboxProject
 import json
+from typing import Optional
 from loguru import logger
 import asyncio
 
@@ -47,5 +48,26 @@ async def ingest_scrapbox(background_tasks: BackgroundTasks, file: UploadFile = 
     data = json.loads(content)
     
     background_tasks.add_task(process_ingestion, data)
+    return {"message": "Ingestion started from file"}
+
+@router.post("/ingest/api")
+async def ingest_from_api(
+    background_tasks: BackgroundTasks, 
+    project_name: str, 
+    connect_sid: Optional[str] = None
+):
+    """
+    Ingest data directly from Scrapbox API.
+    connect_sid is optional, but required for private projects.
+    """
+    async def task_wrapper():
+        try:
+            data = await ScrapboxService.fetch_project_data(project_name, connect_sid)
+            await process_ingestion(data)
+        except Exception as e:
+            logger.error(f"API Ingestion failed: {e}")
+
+    background_tasks.add_task(task_wrapper)
+    return {"message": f"Ingestion started from Scrapbox API for project: {project_name}"}
     
     return {"message": "Ingestion started in background"}

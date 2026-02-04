@@ -1,8 +1,51 @@
 import re
-from typing import List
-from app.models.scrapbox import ScrapboxPage, ScrapboxChunk
+import httpx
+import urllib.parse
+from typing import List, Optional
+from app.models.scrapbox import ScrapboxPage, ScrapboxChunk, ScrapboxProject
+from loguru import logger
 
 class ScrapboxService:
+    @staticmethod
+    async def fetch_project_data(project_name: str, connect_sid: Optional[str] = None) -> dict:
+        """Fetch all pages from a Scrapbox project via API."""
+        base_url = f"https://scrapbox.io/api/pages/{project_name}"
+        cookies = {"connect.sid": connect_sid} if connect_sid else {}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # 1. Get page list
+            logger.info(f"Fetching page list for project: {project_name}")
+            response = await client.get(f"{base_url}?limit=1000", cookies=cookies)
+            response.raise_for_status()
+            pages_list = response.json()["pages"]
+            
+            # 2. Fetch full content for each page
+            full_pages = []
+            for i, p in enumerate(pages_list):
+                page_title = p["title"]
+                logger.info(f"Fetching page ({i+1}/{len(pages_list)}): {page_title}")
+                
+                # Encode title for URL
+                encoded_title = urllib.parse.quote(page_title, safe="")
+                page_res = await client.get(f"{base_url}/{encoded_title}", cookies=cookies)
+                
+                if page_res.status_code == 200:
+                    page_data = page_res.json()
+                    # Convert to our model format (lines is a list of objects in API, but our model expects list[str])
+                    lines = [line_obj["text"] for line_obj in page_data.get("lines", [])]
+                    full_pages.append({
+                        "id": page_data["id"],
+                        "title": page_data["title"],
+                        "updated": page_data["updated"],
+                        "lines": lines
+                    })
+                
+            return {
+                "name": project_name,
+                "displayName": project_name,
+                "pages": full_pages
+            }
+
     @staticmethod
     def clean_scrapbox_text(text: str) -> str:
         # Remove [links], [images.jpg], etc.

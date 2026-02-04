@@ -1,17 +1,12 @@
-"use strict";
 "use client";
 
 import { useState } from "react";
 import axios from "axios";
-import { Search, Send, Upload, Book, Link as LinkIcon, Loader2 } from "lucide-react";
+import { Book, Upload, Loader2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-
-interface Source {
-  title: string;
-  text: string;
-  url: string;
-  score: number;
-}
+import { ChatContainer } from "@/components/chat/ChatContainer";
+import { SearchInput } from "@/components/input/SearchInput";
+import { Source } from "@/components/chat/MessageBubble";
 
 interface ChatMessage {
   role: "user" | "bot";
@@ -34,17 +29,61 @@ export default function Home() {
     setQuery("");
     setIsLoading(true);
 
+    // Initial bot message for streaming
+    const botMessageId = Date.now();
+    setMessages((prev) => [...prev, { role: "bot", content: "", sources: [] }]);
+
     try {
-      const response = await axios.post("http://localhost:8000/api/v1/search", {
-        query: userMessage.content,
+      const response = await fetch("http://localhost:8000/api/v1/search/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: userMessage.content }),
       });
 
-      const botMessage: ChatMessage = {
-        role: "bot",
-        content: response.data.answer,
-        sources: response.data.sources,
-      };
-      setMessages((prev) => [...prev, botMessage]);
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedAnswer = "";
+      let foundSources: Source[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.substring(6));
+              
+              if (data.error) {
+                accumulatedAnswer += `\n[Error: ${data.error}]`;
+              } else if (data.sources) {
+                foundSources = data.sources;
+              } else if (data.answer) {
+                accumulatedAnswer += data.answer;
+              }
+
+              // Update the last message
+              setMessages((prev) => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                updated[lastIdx] = {
+                  ...updated[lastIdx],
+                  content: accumulatedAnswer,
+                  sources: foundSources,
+                };
+                return updated;
+              });
+            } catch (e) {
+              console.error("Error parsing JSON chunk", e);
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error(error);
       setMessages((prev) => [
@@ -76,96 +115,55 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-base-200 p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <main className="min-h-screen bg-base-200">
+      <div className="max-w-5xl mx-auto h-screen flex flex-col p-4 md:p-8">
         {/* Header */}
-        <header className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Book className="text-primary" />
-              Scrapbox RAG
-            </h1>
-            <p className="text-base-content/60">Search your Scrapbox knowledge with Gemma 3</p>
-          </div>
+        <header className="flex justify-between items-center mb-6 shrink-0">
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-3"
+          >
+            <div className="w-12 h-12 bg-primary text-primary-content rounded-xl flex items-center justify-center shadow-lg">
+              <Book size={28} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
+                Scrapbox RAG
+                <div className="badge badge-secondary badge-sm">BETA</div>
+              </h1>
+              <p className="text-xs font-medium text-base-content/50 uppercase tracking-widest">
+                Local Knowledge Base
+              </p>
+            </div>
+          </motion.div>
+          
           <div className="flex gap-2">
-            <label className={`btn btn-outline btn-sm ${isIngesting ? "loading" : ""}`}>
-              <Upload size={16} />
-              JSON Import
-              <input type="file" className="hidden" onChange={handleFileUpload} accept=".json" />
+            <label className={`btn btn-ghost btn-sm gap-2 border-base-300 ${isIngesting ? "disabled" : ""}`}>
+              {isIngesting ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+              <span className="hidden sm:inline">JSON Import</span>
+              <input type="file" className="hidden" onChange={handleFileUpload} accept=".json" disabled={isIngesting} />
             </label>
           </div>
         </header>
 
         {/* Chat Area */}
-        <div className="bg-base-100 rounded-box shadow-xl min-h-[500px] flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-base-content/40 space-y-2">
-                <Search size={48} />
-                <p>Scrapboxから知識を検索しましょう</p>
-              </div>
-            )}
-            <AnimatePresence>
-              {messages.map((msg, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`chat ${msg.role === "user" ? "chat-end" : "chat-start"}`}
-                >
-                  <div className={`chat-bubble ${msg.role === "user" ? "chat-bubble-primary" : "chat-bubble-secondary bg-opacity-10 text-base-content border border-secondary/20"}`}>
-                    <div className="whitespace-pre-wrap">{msg.content}</div>
-                    
-                    {msg.sources && msg.sources.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-base-content/10 space-y-2">
-                        <p className="text-xs font-bold opacity-60 flex items-center gap-1">
-                          <LinkIcon size={12} /> SOURCES
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {msg.sources.map((src, j) => (
-                            <a
-                              key={j}
-                              href={src.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="badge badge-outline badge-sm gap-1 hover:badge-primary transition-colors h-auto py-1"
-                            >
-                              {src.title}
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-            {isLoading && (
-              <div className="chat chat-start">
-                <div className="chat-bubble chat-bubble-secondary bg-opacity-10 text-base-content flex items-center gap-2">
-                  <Loader2 className="animate-spin" size={16} />
-                  思考中...
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Input Area */}
-          <form onSubmit={handleSearch} className="p-4 bg-base-200/50 border-t border-base-content/5">
-            <div className="join w-full">
-              <input
-                type="text"
-                className="input input-bordered join-item w-full bg-base-100"
-                placeholder="興味のあることを入力..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <button type="submit" className="btn btn-primary join-item" disabled={isLoading || !query.trim()}>
-                <Send size={18} />
-              </button>
-            </div>
-          </form>
+        <div className="flex-1 bg-base-100 rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-base-300">
+           <ChatContainer messages={messages} isLoading={isLoading} />
+           <SearchInput 
+             query={query} 
+             setQuery={setQuery} 
+             onSubmit={handleSearch} 
+             isLoading={isLoading} 
+           />
         </div>
+
+        {/* Footer info */}
+        <footer className="mt-4 text-center">
+            <p className="text-xs text-base-content/40 flex items-center justify-center gap-1">
+              Made with <Sparkles size={12} className="text-secondary" /> for Scrapbox Lovers
+            </p>
+        </footer>
       </div>
     </main>
   );
